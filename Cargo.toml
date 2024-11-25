@@ -1,0 +1,25 @@
+[package]
+name = "retch_rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-compression = { version="0.4.12", features = ["all"] }
+h2 = "0.4.7"
+reqwest = { version = "0.12.7", features = ["json", "gzip", "brotli", "zstd", "deflate", "rustls-tls"] }
+rustls = { version="0.23.16", features=["brotli"] }
+rustls-webpki = "0.102.8"
+tokio = { version="1.40.0", features = ["full"] }
+url = "2.5.2"
+webpki-roots = "0.26.6"
+
+[dev-dependencies]
+serde = "1.0.210"
+serde_json = "1.0.128"
+rocket = "0.5.1"
+
+[patch.crates-io]
+rustls = { path = "../rustls/rustls" }
+h2 = { path = "../h2" }
