@@ -1,11 +1,9 @@
 mod statics;
 
 use crate::Browser;
-use rustls::client::EchGreaseConfig;
-use rustls::crypto::{CryptoProvider, aws_lc_rs};
+use rustls::client::{BrowserEmulator as RusTLSBrowser, EchGreaseConfig};
+use rustls::crypto::CryptoProvider;
 use rustls::RootCertStore;
-
-use std::sync::Arc;
 
 pub struct TlsConfig {}
 
@@ -43,33 +41,27 @@ impl TlsConfigBuilder {
   }
 
   pub fn build(self) -> rustls::ClientConfig {
-      let (cipher_suites, signature_algorithms) = match self.browser {
-          Browser::Chrome => (statics::CHROME_CIPHER_SUITES, statics::CHROME_SIGNATURE_VERIFICATION_ALGOS),
-      };
-
-      let crypto_provider = CryptoProvider {
-          cipher_suites: cipher_suites.into(),
-          signature_verification_algorithms: signature_algorithms,
-          ..aws_lc_rs::default_provider()
-      };
+      let crypto_provider = CryptoProvider::builder()
+        .with_browser_emulator(match self.browser {
+            Browser::Chrome => RusTLSBrowser::Chrome,
+        })
+        .build();
 
       let mut root_store = RootCertStore::empty();
       root_store.extend(
           webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
       );
 
-      let mut config: rustls::ClientConfig= rustls::ClientConfig::builder_with_provider(
+      let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
               crypto_provider.into(),
           )
           // TODO - use the ECH extension consistently
-          .with_safe_default_protocol_versions().unwrap()
+          .with_ech(self.get_ech_mode()).unwrap()
           .with_root_certificates(root_store)
+          .with_browser_emulator(match self.browser {
+            Browser::Chrome => RusTLSBrowser::Chrome,
+            })
           .with_no_client_auth();
-      
-      config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-      config.key_log = Arc::new(rustls::KeyLogFile::new());
-      config.cert_decompressors = vec![rustls::compress::BROTLI_DECOMPRESSOR];
-      config.cert_compressors = vec![rustls::compress::BROTLI_COMPRESSOR];
   
       config
   }
