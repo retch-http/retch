@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use reqwest::{Method, Response};
+use reqwest::{Body, Method, Response};
 use url::Url;
 
 use crate::{http_headers::HttpHeaders, tls};
@@ -140,7 +140,7 @@ impl Retcher {
     RetcherBuilder::default()
   }
 
-  async fn make_request(&self, method: Method, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  async fn make_request(&self, method: Method, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     let parsed_url = self
       .parse_url(url.clone())
       .expect("URL should be a valid URL");
@@ -154,6 +154,11 @@ impl Retcher {
 
     let request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into());
+
+    let request = match body {
+      Some(body) => request.body(body),
+      None => request
+    };
 
     let response: Result<Response, reqwest::Error> = request.send().await;
 
@@ -174,14 +179,34 @@ impl Retcher {
   }
 
   pub async fn get(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    self.make_request(Method::GET, url, options).await
+    self.make_request(Method::GET, url, None, options).await
   }
 
   pub async fn head(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    self.make_request(Method::HEAD, url, options).await
+    self.make_request(Method::HEAD, url, None, options).await
+  }
+  
+  pub async fn options(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::OPTIONS, url, None, options).await
+  }
+
+  pub async fn trace(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::TRACE, url, None, options).await
   }
 
   pub async fn delete(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    self.make_request(Method::DELETE, url, options).await
+    self.make_request(Method::DELETE, url, None, options).await
+  }
+
+  pub async fn post(&self, url: String, body: Body, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::POST, url, Some(body), options).await
+  }
+
+  pub async fn put(&self, url: String, body: Body, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::PUT, url, Some(body), options).await
+  }
+
+  pub async fn patch(&self, url: String, body: Body, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::PATCH, url, Some(body), options).await
   }
 }
