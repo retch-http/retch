@@ -14,7 +14,7 @@ pub enum ErrorType {
 }
 
 struct RetcherConfig {
-  browser: Browser,
+  browser: Option<Browser>,
 }
 
 /// Retcher is the main struct used to make (impersonated) requests.
@@ -27,14 +27,14 @@ pub struct Retcher {
 
 #[derive(Debug, Clone, Copy)]
 pub struct RetcherBuilder {
-  browser: Browser,
+  browser: Option<Browser>,
   ignore_tls_errors: bool,
 }
 
 impl Default for RetcherBuilder {
   fn default() -> Self {
     RetcherBuilder {
-      browser: Browser::Chrome,
+      browser: None,
       ignore_tls_errors: false,
     }
   }
@@ -42,7 +42,7 @@ impl Default for RetcherBuilder {
 
 impl RetcherBuilder {
   pub fn with_browser(&mut self, browser: Browser) -> &mut Self {
-    self.browser = browser;
+    self.browser = Some(browser);
     self
   }
 

@@ -25,7 +25,8 @@ impl Into<HeaderMap> for HttpHeaders {
         let mut headers = HeaderMap::new();
 
         let header_values = match self.context.browser {
-            Browser::Chrome => statics::CHROME_HEADERS
+            Some(Browser::Chrome) => statics::CHROME_HEADERS,
+            None => &[]
         };
 
         // TODO: don't use HTTP2 headers for HTTP1.1
@@ -48,7 +49,7 @@ impl Into<HeaderMap> for HttpHeaders {
 #[derive(Default, Clone)]
 pub struct HttpHeadersBuilder {
     host: String,
-    browser: Browser,
+    browser: Option<Browser>,
     https: bool,
     custom_headers: HashMap<String, String>,
 }
@@ -60,7 +61,7 @@ impl HttpHeadersBuilder {
         self
     }
 
-    pub fn with_browser (&mut self, browser: Browser) -> &mut Self {
+    pub fn with_browser (&mut self, browser: Option<Browser>) -> &mut Self {
         self.browser = browser;
         self
     }

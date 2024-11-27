@@ -15,13 +15,13 @@ impl TlsConfig {
 
 #[derive(Debug, Clone, Copy)]
 pub struct TlsConfigBuilder {
-  browser: Browser,
+  browser: Option<Browser>,
 }
 
 impl Default for TlsConfigBuilder {
   fn default() -> Self {
       TlsConfigBuilder {
-          browser: Browser::Chrome,
+          browser: Some(Browser::Chrome),
       }
   }
 }
@@ -35,34 +35,48 @@ impl TlsConfigBuilder {
       EchGreaseConfig::new(statics::GREASE_HPKE_SUITE, public_key).into()
   }
 
-  pub fn with_browser(&mut self, browser: Browser) -> &mut Self {
+  pub fn with_browser(&mut self, browser: Option<Browser>) -> &mut Self {
       self.browser = browser;
       self
   }
 
   pub fn build(self) -> rustls::ClientConfig {
-      let crypto_provider = CryptoProvider::builder()
-        .with_browser_emulator(match self.browser {
-            Browser::Chrome => RusTLSBrowser::Chrome,
-        })
-        .build();
+    let mut root_store = RootCertStore::empty();
+    root_store.extend(
+        webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
+    );
 
-      let mut root_store = RootCertStore::empty();
-      root_store.extend(
-          webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
-      );
+    match self.browser {
+      Some(Browser::Chrome) => {
+        let crypto_provider = CryptoProvider::builder()
+            .with_browser_emulator(RusTLSBrowser::Chrome)
+            .build();
 
-      let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
-              crypto_provider.into(),
-          )
-          // TODO - use the ECH extension consistently
-          .with_ech(self.get_ech_mode()).unwrap()
-          .with_root_certificates(root_store)
-          .with_browser_emulator(match self.browser {
-            Browser::Chrome => RusTLSBrowser::Chrome,
-            })
-          .with_no_client_auth();
-  
-      config
+        let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
+                crypto_provider.into(),
+            )
+            // TODO - use the ECH extension consistently
+            .with_ech(self.get_ech_mode()).unwrap()
+            .with_root_certificates(root_store)
+            .with_browser_emulator(RusTLSBrowser::Chrome)
+            .with_no_client_auth();
+    
+        config
+      },
+      None => {
+        let crypto_provider = CryptoProvider::builder()
+            .build();
+
+        let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
+                crypto_provider.into(),
+            )
+            // TODO - use the ECH extension consistently
+            .with_ech(self.get_ech_mode()).unwrap()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+    
+        config
+      }
+    }
   }
 }
