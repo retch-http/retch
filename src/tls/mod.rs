@@ -1,7 +1,7 @@
 mod statics;
 
 use crate::Browser;
-use rustls::client::{BrowserEmulator as RusTLSBrowser, EchGreaseConfig};
+use rustls::client::{BrowserEmulator as RusTLSBrowser, BrowserType, EchGreaseConfig};
 use rustls::crypto::CryptoProvider;
 use rustls::RootCertStore;
 
@@ -48,8 +48,12 @@ impl TlsConfigBuilder {
 
     match self.browser {
       Some(Browser::Chrome) => {
+        let rustls_browser = match self.browser.unwrap() {
+          Browser::Chrome => RusTLSBrowser { browser_type: BrowserType::Chrome, version: 125 }
+        };
+
         let crypto_provider = CryptoProvider::builder()
-            .with_browser_emulator(RusTLSBrowser::Chrome)
+            .with_browser_emulator(&rustls_browser)
             .build();
 
         let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
@@ -58,7 +62,7 @@ impl TlsConfigBuilder {
             // TODO - use the ECH extension consistently
             .with_ech(self.get_ech_mode()).unwrap()
             .with_root_certificates(root_store)
-            .with_browser_emulator(RusTLSBrowser::Chrome)
+            .with_browser_emulator(&rustls_browser)
             .with_no_client_auth();
     
         config
