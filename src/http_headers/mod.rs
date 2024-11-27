@@ -72,7 +72,7 @@ impl HttpHeadersBuilder {
     }
 
     pub fn with_custom_headers (&mut self, custom_headers: HashMap<String, String>) -> &mut Self {
-        self.custom_headers = custom_headers;
+        self.custom_headers = custom_headers.clone();
         self
     }
 
