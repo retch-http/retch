@@ -1,15 +1,16 @@
 use std::collections::HashMap;
-use reqwest::Response;
+use reqwest::{Method, Response};
 use url::Url;
-use async_recursion::async_recursion;
 
 use crate::{http_headers::HttpHeaders, tls};
 use super::Browser;
 
 #[derive(Debug, Clone)]
 pub enum ErrorType {
-  UrlParseError,
-  ProtocolError,
+  UrlParsingError,
+  UrlMissingHostnameError,
+  UrlProtocolError,
+  ImpersonationError,
   RequestError,
   ResponseError,
 }
@@ -23,7 +24,7 @@ struct RetcherConfig {
 /// 
 /// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
 pub struct Retcher {
-  client: reqwest::Client,
+  pub(self) client: reqwest::Client,
   config: RetcherConfig,
 }
 
@@ -118,12 +119,12 @@ impl Retcher {
     let url = Url::parse(&url);
 
     if url.is_err() {
-      return Err(ErrorType::UrlParseError);
+      return Err(ErrorType::UrlParsingError);
     }
     let url = url.unwrap();
 
     if url.host_str().is_none() {
-      return Err(ErrorType::UrlParseError);
+      return Err(ErrorType::UrlMissingHostnameError);
     }
 
     let protocol = url.scheme();
@@ -131,7 +132,7 @@ impl Retcher {
     return match protocol {
       "http" => Ok(url),
       "https" => Ok(url),
-      _ => Err(ErrorType::ProtocolError),
+      _ => Err(ErrorType::UrlProtocolError),
     };
   }
 
@@ -139,15 +140,10 @@ impl Retcher {
     RetcherBuilder::default()
   }
 
-  #[async_recursion]
-  pub async fn get(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    let parsed_url = self.parse_url(url.clone());
-
-    if parsed_url.is_err() {
-      return Err(parsed_url.err().unwrap());
-    }
-
-    let parsed_url = parsed_url.unwrap();
+  async fn make_request(&self, method: Method, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    let parsed_url = self
+      .parse_url(url.clone())
+      .expect("URL should be a valid URL");
 
     let headers = HttpHeaders::get_builder()
       .with_browser(self.config.browser)
@@ -156,21 +152,36 @@ impl Retcher {
       .with_custom_headers(options.clone().unwrap_or_default().headers)
       .build();
 
-    let request = self.client.get(parsed_url)
+    let request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into());
 
     let response: Result<Response, reqwest::Error> = request.send().await;
 
     if response.is_err() {
       if !self.config.vanilla_fallback || self.config.browser.is_none() { 
-        return Err(ErrorType::RequestError)
+        return Err(ErrorType::ImpersonationError)
       }
       
       println!("Debug: encountered an error while using the browser impersonation, retrying with vanilla reqwest
 {:#?}", response.err().unwrap());
-      return Retcher::default().get(url, options).await;
+      return match Retcher::default().client.request(method, url).send().await {
+        Ok(response) => Ok(response),
+        Err(_) => Err(ErrorType::RequestError) // TODO: don't supress the error
+      }
     }
     
     Ok(response.unwrap())
+  }
+
+  pub async fn get(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::GET, url, options).await
+  }
+
+  pub async fn head(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::HEAD, url, options).await
+  }
+
+  pub async fn delete(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::DELETE, url, options).await
   }
 }
