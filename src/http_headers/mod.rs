@@ -30,18 +30,32 @@ impl Into<HeaderMap> for HttpHeaders {
             None => &[]
         };
 
+        let mut used_custom_headers: Vec<String> = vec![];
+
         // TODO: don't use HTTP2 headers for HTTP1.1
-        for (name, value) in header_values {
-            let value = match *name {
-                "Host" => String::from(self.context.host.as_str()),
-                _ => String::from(*value)
+        for (name, impersonated_value) in header_values {
+            let value: &str = match self.context.custom_headers.get(*name)  { 
+                Some(custom_value) => {
+                    used_custom_headers.push(name.to_string());
+                    custom_value.as_str()
+                },
+                None => impersonated_value,
             };
 
             headers.append(
                 HeaderName::from_str(name).unwrap(), 
-                HeaderValue::from_str(value.as_str()).unwrap()
+                HeaderValue::from_str(value).unwrap()
             );
         }
+
+        self.context.custom_headers.iter().for_each(|(name, value)| {
+            if !used_custom_headers.contains(name) {
+                headers.append(
+                    HeaderName::from_str(name).unwrap(), 
+                    HeaderValue::from_str(value).unwrap()
+                );
+            }
+        });
 
         headers
     }
