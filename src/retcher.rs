@@ -1,5 +1,5 @@
-use std::{collections::HashMap, io::Bytes, str::FromStr};
-use reqwest::{Body, Method, Response};
+use std::{collections::HashMap, str::FromStr};
+use reqwest::{Method, Response};
 use url::Url;
 
 use crate::{http_headers::HttpHeaders, tls};
