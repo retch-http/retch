@@ -47,9 +47,10 @@ impl TlsConfigBuilder {
     );
 
     match self.browser {
-      Some(Browser::Chrome) => {
-        let rustls_browser = match self.browser.unwrap() {
-          Browser::Chrome => RusTLSBrowser { browser_type: BrowserType::Chrome, version: 125 }
+      Some(browser) => {
+        let rustls_browser = match browser {
+          Browser::Chrome => RusTLSBrowser { browser_type: BrowserType::Chrome, version: 125 },
+          Browser::Firefox => RusTLSBrowser { browser_type: BrowserType::Firefox, version: 125 },
         };
 
         let crypto_provider = CryptoProvider::builder()

@@ -6,5 +6,6 @@ pub mod retcher;
 pub enum Browser {
   #[default]
   Chrome,
+  Firefox,
 }
 

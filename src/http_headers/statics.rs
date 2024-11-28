@@ -16,3 +16,17 @@ pub static CHROME_HEADERS: &'static [(&'static str, &'static str)] = &[
     ("accept-encoding", "gzip, deflate, br, zstd"),
     ("accept-language", "en-US,en;q=0.9"),
 ];
+
+pub static FIREFOX_HEADERS: &'static [(&'static str, &'static str)] = &[
+    ("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"),
+    ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8"),
+    ("Accept-Language", "en,cs;q=0.7,en-US;q=0.3"),
+    ("Accept-Encoding", "gzip, deflate"),
+    ("sec-fetch-dest", "document"),
+    ("sec-fetch-mode", "navigate"),
+    ("sec-fetch-site", "none"),
+    ("sec-fetch-user", "?1"),
+    ("Connection", "keep-alive"),
+    ("Upgrade-Insecure-Requests", "1"),
+    ("Priority", "u=0, i"),
+];

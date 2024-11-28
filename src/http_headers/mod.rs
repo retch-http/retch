@@ -26,6 +26,7 @@ impl Into<HeaderMap> for HttpHeaders {
 
         let header_values = match self.context.browser {
             Some(Browser::Chrome) => statics::CHROME_HEADERS,
+            Some(Browser::Firefox) => statics::FIREFOX_HEADERS,
             None => &[]
         };
 
