@@ -52,17 +52,17 @@ impl Default for RetcherBuilder {
 }
 
 impl RetcherBuilder {
-  pub fn with_browser(&mut self, browser: Browser) -> &mut Self {
+  pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
   }
 
-  pub fn with_ignore_tls_errors(&mut self, ignore_tls_errors: bool) -> &mut Self {
+  pub fn with_ignore_tls_errors(mut self, ignore_tls_errors: bool) -> Self {
     self.ignore_tls_errors = ignore_tls_errors;
     self
   }
 
-  pub fn with_fallback_to_vanilla(&mut self, vanilla_fallback: bool) -> &mut Self {
+  pub fn with_fallback_to_vanilla(mut self, vanilla_fallback: bool) -> Self {
     self.vanilla_fallback = vanilla_fallback;
     self
   }
@@ -163,12 +163,12 @@ impl Retcher {
     let response: Result<Response, reqwest::Error> = request.send().await;
 
     if response.is_err() {
+      println!("{:#?}", response.err().unwrap());
+
       if !self.config.vanilla_fallback || self.config.browser.is_none() { 
         return Err(ErrorType::ImpersonationError)
       }
-      
-      println!("Debug: encountered an error while using the browser impersonation, retrying with vanilla reqwest
-{:#?}", response.err().unwrap());
+
       return match Retcher::default().client.request(method, url).send().await {
         Ok(response) => Ok(response),
         Err(_) => Err(ErrorType::RequestError) // TODO: don't supress the error
@@ -198,15 +198,15 @@ impl Retcher {
     self.make_request(Method::DELETE, url, None, options).await
   }
 
-  pub async fn post(&self, url: String, body: Body, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    self.make_request(Method::POST, url, Some(body), options).await
+  pub async fn post(&self, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::POST, url, body, options).await
   }
 
-  pub async fn put(&self, url: String, body: Body, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    self.make_request(Method::PUT, url, Some(body), options).await
+  pub async fn put(&self, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::PUT, url, body, options).await
   }
 
-  pub async fn patch(&self, url: String, body: Body, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    self.make_request(Method::PATCH, url, Some(body), options).await
+  pub async fn patch(&self, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    self.make_request(Method::PATCH, url, body, options).await
   }
 }
