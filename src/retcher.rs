@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, io::Bytes, str::FromStr};
 use reqwest::{Body, Method, Response};
 use url::Url;
 
@@ -140,7 +140,7 @@ impl Retcher {
     RetcherConfig::default()
   }
 
-  async fn make_request(&self, method: Method, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  async fn make_request(&self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     let parsed_url = self
       .parse_url(url.clone())
       .expect("URL should be a valid URL");
@@ -198,15 +198,15 @@ impl Retcher {
     self.make_request(Method::DELETE, url, None, options).await
   }
 
-  pub async fn post(&self, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn post(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::POST, url, body, options).await
   }
 
-  pub async fn put(&self, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn put(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::PUT, url, body, options).await
   }
 
-  pub async fn patch(&self, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn patch(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::PATCH, url, body, options).await
   }
 }
