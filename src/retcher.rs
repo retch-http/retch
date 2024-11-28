@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use reqwest::{Body, Method, Response};
 use url::Url;
 
@@ -15,11 +15,6 @@ pub enum ErrorType {
   ResponseError,
 }
 
-struct RetcherConfig {
-  browser: Option<Browser>,
-  vanilla_fallback: bool,
-}
-
 /// Retcher is the main struct used to make (impersonated) requests.
 /// 
 /// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
@@ -30,28 +25,30 @@ pub struct Retcher {
 
 impl Default for Retcher {
   fn default() -> Self {
-    RetcherBuilder::default().build()
+    RetcherConfig::default().build()
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct RetcherBuilder {
+#[derive(Debug, Clone)]
+pub struct RetcherConfig {
   browser: Option<Browser>,
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
+  proxy_url: String,
 }
 
-impl Default for RetcherBuilder {
+impl Default for RetcherConfig {
   fn default() -> Self {
-    RetcherBuilder {
+    RetcherConfig {
       browser: None,
       ignore_tls_errors: false,
       vanilla_fallback: true,
+      proxy_url: String::from_str("").unwrap(),
     }
   }
 }
 
-impl RetcherBuilder {
+impl RetcherConfig {
   pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
@@ -66,18 +63,14 @@ impl RetcherBuilder {
     self.vanilla_fallback = vanilla_fallback;
     self
   }
+  
+  pub fn with_proxy(mut self, proxy_url: String) -> Self {
+    self.proxy_url = proxy_url;
+    self
+  }
 
   pub fn build(self) -> Retcher {
     Retcher::new(self)
-  }
-}
-
-impl Into<RetcherConfig> for RetcherBuilder {
-  fn into(self) -> RetcherConfig {
-    RetcherConfig {
-      browser: self.browser,
-      vanilla_fallback: self.vanilla_fallback,
-    }
   }
 }
 
@@ -98,20 +91,27 @@ impl Default for RequestOptions {
 
 impl Retcher {
   /// Creates a new `Retcher` instance with the given `EngineOptions`.
-  fn new(builder: RetcherBuilder) -> Self {
+  fn new(config: RetcherConfig) -> Self {
     let mut client = reqwest::Client::builder();
     let tls_config = tls::TlsConfig::builder()
-      .with_browser(builder.browser)
+      .with_browser(config.browser)
       .build();
     
     client = client
-      .danger_accept_invalid_certs(builder.ignore_tls_errors)
-      .danger_accept_invalid_hostnames(builder.ignore_tls_errors)
+      .danger_accept_invalid_certs(config.ignore_tls_errors)
+      .danger_accept_invalid_hostnames(config.ignore_tls_errors)
       .use_preconfigured_tls(tls_config);
+
+    if config.proxy_url.len() > 0 {
+      client = client.proxy(
+        reqwest::Proxy::all(&config.proxy_url)
+        .expect("The proxy_url option should be a valid URL.")
+      );
+    }
 
     Retcher { 
       client: client.build().unwrap(), 
-      config: builder.into()
+      config
     }
   }
 
@@ -136,8 +136,8 @@ impl Retcher {
     };
   }
 
-  pub fn builder() -> RetcherBuilder {
-    RetcherBuilder::default()
+  pub fn builder() -> RetcherConfig {
+    RetcherConfig::default()
   }
 
   async fn make_request(&self, method: Method, url: String, body: Option<Body>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
