@@ -30,6 +30,16 @@ impl Into<HeaderMap> for HttpHeaders {
             None => &[]
         };
 
+        let pseudo_headers_order: &[&str] = match self.context.browser {
+            Some(Browser::Chrome) => statics::CHROME_PSEUDOHEADERS_ORDER.as_ref(),
+            Some(Browser::Firefox) => statics::FIREFOX_PSEUDOHEADERS_ORDER.as_ref(),
+            None => &[]
+        };
+
+        if pseudo_headers_order.len() != 0 {
+            std::env::set_var("RETCH_H2_PSEUDOHEADERS_ORDER", pseudo_headers_order.join(","));
+        }
+
         let mut used_custom_headers: Vec<String> = vec![];
 
         // TODO: don't use HTTP2 headers for HTTP1.1

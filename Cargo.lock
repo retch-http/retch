@@ -655,8 +655,7 @@ dependencies = [
 [[package]]
 name = "h2"
 version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccae279728d634d083c00f6099cb58f01cc99c145b84b8be2f6c74618d79922e"
+source = "git+https://github.com/retch-http/h2?branch=retch-patch#bb35bf7eaecd3ee32b479722bf436fe3c387667e"
 dependencies = [
  "atomic-waker",
  "bytes",

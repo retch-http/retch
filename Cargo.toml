@@ -22,4 +22,5 @@ serde_json = "1.0.128"
 rocket = "0.5.1"
 
 [patch.crates-io]
+h2 = { git = "https://github.com/retch-http/h2", branch = "retch-patch" }
 rustls = { git = "https://github.com/retch-http/rustls", branch = "retch-patch" }
