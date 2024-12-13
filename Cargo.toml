@@ -10,7 +10,7 @@ async-compression = { version="0.4.12", features = ["all"] }
 async-recursion = "1.1.1"
 h2 = "0.4.7"
 num-bigint = "0.4.6"
-reqwest = { version = "0.12.7", features = ["json", "gzip", "brotli", "zstd", "deflate", "rustls-tls"] }
+reqwest = { version = "0.12.7", features = ["json", "gzip", "brotli", "zstd", "deflate", "rustls-tls", "http3"] }
 rustls = { version="0.23.16" }
 rustls-webpki = "0.102.8"
 tokio = { version="1.40.0", features = ["full"] }
