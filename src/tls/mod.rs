@@ -2,6 +2,7 @@ mod statics;
 mod ffdhe;
 
 use crate::Browser;
+use reqwest::Version;
 use rustls::client::{BrowserEmulator as RusTLSBrowser, BrowserType, EchGreaseConfig};
 use rustls::crypto::aws_lc_rs::kx_group::{SECP256R1, SECP384R1, X25519};
 use rustls::crypto::CryptoProvider;
@@ -18,12 +19,14 @@ impl TlsConfig {
 #[derive(Debug, Clone, Copy)]
 pub struct TlsConfigBuilder {
   browser: Option<Browser>,
+  max_http_version: Version,
 }
 
 impl Default for TlsConfigBuilder {
   fn default() -> Self {
       TlsConfigBuilder {
-          browser: Some(Browser::Chrome),
+          browser: None,
+          max_http_version: Version::HTTP_2,
       }
   }
 }
@@ -42,13 +45,18 @@ impl TlsConfigBuilder {
       self
   }
 
+  pub fn with_http3(&mut self) -> &mut Self {
+      self.max_http_version = Version::HTTP_3;
+      self
+  }
+
   pub fn build(self) -> rustls::ClientConfig {
     let mut root_store = RootCertStore::empty();
     root_store.extend(
         webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
     );
 
-    match self.browser {
+    let mut config = match self.browser {
       Some(browser) => {
         let rustls_browser = match browser {
           Browser::Chrome => RusTLSBrowser { browser_type: BrowserType::Chrome, version: 125 },
@@ -98,6 +106,12 @@ impl TlsConfigBuilder {
     
         config
       }
-    }
+    };
+
+    if self.max_http_version == Version::HTTP_3 {
+      config.alpn_protocols = vec![b"h3".to_vec()];
+    };
+
+    config
   }
 }

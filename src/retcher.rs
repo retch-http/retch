@@ -1,5 +1,5 @@
 use std::{collections::HashMap, str::FromStr};
-use reqwest::{Method, Response};
+use reqwest::{Method, Response, Version};
 use url::Url;
 
 use crate::{http_headers::HttpHeaders, tls};
@@ -35,6 +35,7 @@ pub struct RetcherConfig {
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
   proxy_url: String,
+  max_http_version: Version,
 }
 
 impl Default for RetcherConfig {
@@ -44,6 +45,7 @@ impl Default for RetcherConfig {
       ignore_tls_errors: false,
       vanilla_fallback: true,
       proxy_url: String::from_str("").unwrap(),
+      max_http_version: Version::HTTP_2,
     }
   }
 }
@@ -66,6 +68,11 @@ impl RetcherConfig {
   
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
+    self
+  }
+
+  pub fn with_http3(mut self) -> Self {
+    self.max_http_version = Version::HTTP_3;
     self
   }
 
@@ -93,14 +100,23 @@ impl Retcher {
   /// Creates a new `Retcher` instance with the given `EngineOptions`.
   fn new(config: RetcherConfig) -> Self {
     let mut client = reqwest::Client::builder();
-    let tls_config = tls::TlsConfig::builder()
-      .with_browser(config.browser)
-      .build();
+    let mut tls_config_builder = tls::TlsConfig::builder();
+    let mut tls_config_builder = tls_config_builder.with_browser(config.browser);
+
+    if config.max_http_version == Version::HTTP_3 {
+      tls_config_builder = tls_config_builder.with_http3();
+    }
+
+    let tls_config = tls_config_builder.build();
     
     client = client
       .danger_accept_invalid_certs(config.ignore_tls_errors)
       .danger_accept_invalid_hostnames(config.ignore_tls_errors)
       .use_preconfigured_tls(tls_config);
+
+    if config.max_http_version == Version::HTTP_3 {
+      client = client.http3_prior_knowledge();
+    }
 
     if config.proxy_url.len() > 0 {
       client = client.proxy(
@@ -152,8 +168,9 @@ impl Retcher {
       .with_custom_headers(options.clone().unwrap_or_default().headers)
       .build();
 
-    let request = self.client.request(method.clone(), parsed_url)
-      .headers(headers.into());
+    let mut request = self.client.request(method.clone(), parsed_url)
+      .headers(headers.into())
+      .version(self.config.max_http_version);
 
     let request = match body {
       Some(body) => request.body(body),
