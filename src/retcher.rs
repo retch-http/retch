@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 use reqwest::{Method, Response, Version};
 
 use crate::{errors::ErrorType, http_headers::HttpHeaders, request::RequestOptions, tls, utils::parse_url};
@@ -11,6 +11,7 @@ pub struct RetcherBuilder {
   vanilla_fallback: bool,
   proxy_url: String,
   max_http_version: Version,
+  request_timeout: Duration,
 }
 
 impl Default for RetcherBuilder {
@@ -21,6 +22,7 @@ impl Default for RetcherBuilder {
       vanilla_fallback: true,
       proxy_url: String::from_str("").unwrap(),
       max_http_version: Version::HTTP_2,
+      request_timeout: Duration::from_secs(30),
     }
   }
 }
@@ -48,6 +50,11 @@ impl RetcherBuilder {
 
   pub fn with_http3(mut self) -> Self {
     self.max_http_version = Version::HTTP_3;
+    self
+  }
+
+  pub fn with_timeout(mut self, timeout: Duration) -> Self {
+    self.request_timeout = timeout;
     self
   }
 
@@ -91,7 +98,8 @@ impl Retcher {
     client = client
       .danger_accept_invalid_certs(config.ignore_tls_errors)
       .danger_accept_invalid_hostnames(config.ignore_tls_errors)
-      .use_preconfigured_tls(tls_config);
+      .use_preconfigured_tls(tls_config)
+      .timeout(config.request_timeout);
 
     if config.max_http_version == Version::HTTP_3 {
       client = client.http3_prior_knowledge();
