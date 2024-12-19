@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use reqwest::{Method, Response};
 use url::Url;
 
@@ -35,6 +35,7 @@ pub struct RetcherConfig {
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
   proxy_url: String,
+  request_timeout: Duration,
 }
 
 impl Default for RetcherConfig {
@@ -44,6 +45,7 @@ impl Default for RetcherConfig {
       ignore_tls_errors: false,
       vanilla_fallback: true,
       proxy_url: String::from_str("").unwrap(),
+      request_timeout: Duration::from_secs(30),
     }
   }
 }
@@ -66,6 +68,11 @@ impl RetcherConfig {
   
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
+    self
+  }
+
+  pub fn with_timeout(mut self, timeout: Duration) -> Self {
+    self.request_timeout = timeout;
     self
   }
 
@@ -100,7 +107,8 @@ impl Retcher {
     client = client
       .danger_accept_invalid_certs(config.ignore_tls_errors)
       .danger_accept_invalid_hostnames(config.ignore_tls_errors)
-      .use_preconfigured_tls(tls_config);
+      .use_preconfigured_tls(tls_config)
+      .timeout(config.request_timeout);
 
     if config.proxy_url.len() > 0 {
       client = client.proxy(
