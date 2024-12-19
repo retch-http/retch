@@ -1,5 +1,5 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
-use reqwest::{Method, Response};
+use reqwest::{Method, Response, Version};
 use url::Url;
 
 use crate::{http_headers::HttpHeaders, tls};
@@ -184,8 +184,11 @@ impl Retcher {
       .build();
 
     let mut request = self.client.request(method.clone(), parsed_url)
-      .headers(headers.into())
-      .version(self.config.max_http_version);
+      .headers(headers.into());
+
+    if self.config.max_http_version == Version::HTTP_3 {
+      request = request.version(Version::HTTP_3);
+    }
 
     let mut request = match body {
       Some(body) => request.body(body),
