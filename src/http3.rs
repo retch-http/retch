@@ -1,6 +1,5 @@
 use hickory_proto::rr::rdata::svcb::SvcParamValue;
 use hickory_proto::rr::RData;
-use url::Url;
 
 use tokio::net::TcpStream as TokioTcpStream;
 use hickory_client::client::{AsyncClient, ClientHandle};
@@ -8,15 +7,16 @@ use hickory_client::proto::iocompat::AsyncIoTokioAsStd;
 use hickory_client::rr::Name;
 use hickory_client::tcp::TcpClientStream;
 
-pub async fn supports_http3_dns(url: Url) -> bool {
+pub async fn supports_http3_dns(host: &String) -> bool {
     // todo: use the DNS server from the system config
     let (stream, sender) =
     TcpClientStream::<AsyncIoTokioAsStd<TokioTcpStream>>::new(([8, 8, 8, 8], 53).into());
     let (mut client, bg) = AsyncClient::new(stream, sender, None).await.unwrap();
 
+    // todo: Spawn the background task only once (persist)
     tokio::spawn(bg);
 
-    let domain_name = Name::from_utf8(url.host_str().unwrap()).unwrap();
+    let domain_name = Name::from_utf8(host).unwrap();
 
     let response = client.query(
         domain_name,

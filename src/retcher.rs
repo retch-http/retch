@@ -20,18 +20,20 @@ pub enum ErrorType {
 /// 
 /// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
 pub struct Retcher {
-  pub(self) client: reqwest::Client,
-  config: RetcherConfig,
+  pub(self) base_client: reqwest::Client,
+  pub(self) h3_client: Option<reqwest::Client>,
+  h3_alt_svc: HashMap<String, bool>,
+  config: RetcherBuilder,
 }
 
 impl Default for Retcher {
   fn default() -> Self {
-    RetcherConfig::default().build()
+    RetcherBuilder::default().build()
   }
 }
 
 #[derive(Debug, Clone)]
-pub struct RetcherConfig {
+pub struct RetcherBuilder {
   browser: Option<Browser>,
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
@@ -40,9 +42,9 @@ pub struct RetcherConfig {
   max_http_version: Version,
 }
 
-impl Default for RetcherConfig {
+impl Default for RetcherBuilder {
   fn default() -> Self {
-    RetcherConfig {
+    RetcherBuilder {
       browser: None,
       ignore_tls_errors: false,
       vanilla_fallback: true,
@@ -53,7 +55,7 @@ impl Default for RetcherConfig {
   }
 }
 
-impl RetcherConfig {
+impl RetcherBuilder {
   pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
@@ -94,12 +96,12 @@ impl RetcherConfig {
   }
 }
 
-/// RequestOptions is a struct holding additional options for the fetch request.
 #[derive(Debug, Clone)]
 pub struct RequestOptions {
   /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
   pub headers: HashMap<String, String>,
   pub timeout: Option<Duration>,
+  pub http3_prior_knowledge: bool,
 }
 
 impl Default for RequestOptions {
@@ -107,13 +109,17 @@ impl Default for RequestOptions {
     RequestOptions {
       headers: HashMap::new(),
       timeout: None,
+      http3_prior_knowledge: false,
     }
   }
 }
 
 impl Retcher {
-  /// Creates a new `Retcher` instance with the given `EngineOptions`.
-  fn new(config: RetcherConfig) -> Self {
+  pub fn builder() -> RetcherBuilder {
+    RetcherBuilder::default()
+  }
+
+  fn new_reqwest_client(config: &RetcherBuilder) -> Result<reqwest::Client, reqwest::Error> {
     let mut client = reqwest::Client::builder();
     let mut tls_config_builder = tls::TlsConfig::builder();
     let mut tls_config_builder = tls_config_builder.with_browser(config.browser);
@@ -141,9 +147,27 @@ impl Retcher {
       );
     }
 
+    client.build()
+  }
+
+  /// Creates a new `Retcher` instance with the given `EngineOptions`.
+  fn new(config: RetcherBuilder) -> Self {
+    let mut h3_client: Option<reqwest::Client> = None;
+    let mut base_client = Self::new_reqwest_client(&config).unwrap();
+
+    if config.max_http_version == Version::HTTP_3 {
+      h3_client = Some(base_client);
+      base_client = Self::new_reqwest_client(&RetcherBuilder {
+        max_http_version: Version::HTTP_2,
+        ..config.clone()
+      }).unwrap();
+    }
+
     Retcher { 
-      client: client.build().unwrap(), 
-      config
+      base_client, 
+      h3_client,
+      config,
+      h3_alt_svc: HashMap::new(),
     }
   }
 
@@ -168,101 +192,117 @@ impl Retcher {
     };
   }
 
-  pub fn builder() -> RetcherConfig {
-    RetcherConfig::default()
+  async fn should_use_h3(self: &mut Self, host: &String) -> bool {
+    if self.config.max_http_version < Version::HTTP_3 {
+      debug!("HTTP/3 is disabled, falling back to TCP-based requests.");
+      return false;
+    }
+
+    if let Some(alt_svc) = self.h3_alt_svc.get(host) {
+      return alt_svc.to_owned();
+    }
+
+    let dns_h3_record_exists = supports_http3_dns(host).await;
+    if dns_h3_record_exists {
+      debug!("HTTP/3 DNS record found for {}", host);
+      self.h3_alt_svc.insert(host.clone(), true);
+    }
+
+    dns_h3_record_exists
   }
 
-  async fn make_request(&self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    let parsed_url = self
-      .parse_url(url.clone())
+  async fn make_request(&mut self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+    let options = options.unwrap_or_default();
+
+    let parsed_url = self.parse_url(url.clone())
       .expect("URL should be a valid URL");
+    let host = parsed_url.host_str().unwrap().to_string();
+
+    let h3 = options.http3_prior_knowledge || self.should_use_h3(&host).await;
 
     let headers = HttpHeaders::get_builder()
-      .with_browser(self.config.browser)
-      .with_host(parsed_url.host_str().unwrap().to_string())
+      .with_browser(&self.config.browser)
+      .with_host(&host)
       .with_https(parsed_url.scheme() == "https")
-      .with_custom_headers(options.clone().unwrap_or_default().headers)
+      .with_custom_headers(&options.headers)
       .build();
 
-    let mut request = self.client.request(method.clone(), parsed_url)
+    let client = if h3 {
+      debug!("Using QUIC for request to {}", url);
+      self.h3_client.as_ref().unwrap()
+    } else {
+      debug!("{} doesn't seem to have HTTP3 support", url);
+      &self.base_client
+    };
+
+    let mut request = client
+      .request(method.clone(), parsed_url)
       .headers(headers.into());
 
-    if self.config.max_http_version == Version::HTTP_3 {
+    if h3 {
       request = request.version(Version::HTTP_3);
     }
 
-    let mut request = match body {
+    if let Some(timeout) = options.timeout {
+      request = request.timeout(timeout);
+    }
+
+    let request = match body {
       Some(body) => request.body(body),
       None => request
     };
 
-    if let Some(options) = options {
-      if let Some(timeout) = options.timeout {
-        request = request.timeout(timeout);
-      }
-    }
-
-    if self.config.max_http_version == Version::HTTP_3 {
-      debug!("Checking DNS records if the server supports HTTP/3...");
-
-      let res = supports_http3_dns(Url::parse(url.as_str()).unwrap()).await;
-
-      if res {
-        debug!("h3 ALPN DNS record found ({:#?} supports HTTP/3)", url);
-      } else {
-        debug!("no h3 ALPN record found ({:#?} might not support HTTP/3)", url);
-      }
-
-      request = request.version(Version::HTTP_3);
-    }
-
-    let response: Result<Response, reqwest::Error> = request.send().await;
+    let response = request.send().await;
 
     if response.is_err() {
-      println!("{:#?}", response.err().unwrap());
+      return Err(ErrorType::RequestError);
+    }
+    
+    let response = response.unwrap();
+    
+    self.h3_alt_svc.insert(host.clone(), false);
 
-      if !self.config.vanilla_fallback || self.config.browser.is_none() { 
-        return Err(ErrorType::ImpersonationError)
-      }
-
-      return match Retcher::default().client.request(method, url).send().await {
-        Ok(response) => Ok(response),
-        Err(_) => Err(ErrorType::RequestError) // TODO: don't supress the error
+    if let Some(alt_svc) = response.headers().get("Alt-Svc") {
+      let alt_svc = alt_svc.to_str().unwrap();
+      if alt_svc.contains("h3") {
+        debug!("{} supports HTTP/3 (alt-svc header), adding to Alt-Svc cache", host);
+        self.h3_alt_svc.insert(host, true);
       }
     }
     
-    Ok(response.unwrap())
+    Ok(response)
   }
 
-  pub async fn get(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn get(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::GET, url, None, options).await
   }
 
-  pub async fn head(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn head(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::HEAD, url, None, options).await
   }
   
-  pub async fn options(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn options(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::OPTIONS, url, None, options).await
   }
 
-  pub async fn trace(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn trace(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::TRACE, url, None, options).await
   }
 
-  pub async fn delete(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn delete(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::DELETE, url, None, options).await
   }
 
-  pub async fn post(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn post(&mut self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::POST, url, body, options).await
   }
 
-  pub async fn put(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn put(&mut self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::PUT, url, body, options).await
   }
 
-  pub async fn patch(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn patch(&mut self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::PATCH, url, body, options).await
   }
+
 }
