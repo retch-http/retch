@@ -56,26 +56,31 @@ impl RetcherConfig {
     self
   }
 
+  /// If set to true, the client will ignore TLS-related errors.
   pub fn with_ignore_tls_errors(mut self, ignore_tls_errors: bool) -> Self {
     self.ignore_tls_errors = ignore_tls_errors;
     self
   }
 
+  /// If set to true, the client will fallback to vanilla requests if the impersonated browser encounters an error.
   pub fn with_fallback_to_vanilla(mut self, vanilla_fallback: bool) -> Self {
     self.vanilla_fallback = vanilla_fallback;
     self
   }
   
+  /// Sets the proxy URL to use for requests.
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
     self
   }
 
-  pub fn with_timeout(mut self, timeout: Duration) -> Self {
+  /// Sets the default timeout for requests.
+  pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
     self.request_timeout = timeout;
     self
   }
 
+  /// Builds the `Retcher` instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
   }
@@ -85,13 +90,15 @@ impl RetcherConfig {
 #[derive(Debug, Clone)]
 pub struct RequestOptions {
   /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
-  pub headers: HashMap<String, String>
+  pub headers: HashMap<String, String>,
+  pub timeout: Option<Duration>,
 }
 
 impl Default for RequestOptions {
   fn default() -> Self {
     RequestOptions {
       headers: HashMap::new(),
+      timeout: None,
     }
   }
 }
@@ -160,13 +167,14 @@ impl Retcher {
       .with_custom_headers(options.clone().unwrap_or_default().headers)
       .build();
 
-    let request = self.client.request(method.clone(), parsed_url)
+    let mut request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into());
 
-    let request = match body {
-      Some(body) => request.body(body),
-      None => request
-    };
+    if let Some(options) = options {
+      if let Some(timeout) = options.timeout {
+        request = request.timeout(timeout);
+      }
+    }
 
     let response: Result<Response, reqwest::Error> = request.send().await;
 
