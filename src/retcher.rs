@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use reqwest::{Method, Response};
 use url::Url;
 
@@ -35,6 +35,7 @@ pub struct RetcherConfig {
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
   proxy_url: String,
+  request_timeout: Duration,
 }
 
 impl Default for RetcherConfig {
@@ -44,6 +45,7 @@ impl Default for RetcherConfig {
       ignore_tls_errors: false,
       vanilla_fallback: true,
       proxy_url: String::from_str("").unwrap(),
+      request_timeout: Duration::from_secs(30),
     }
   }
 }
@@ -54,21 +56,31 @@ impl RetcherConfig {
     self
   }
 
+  /// If set to true, the client will ignore TLS-related errors.
   pub fn with_ignore_tls_errors(mut self, ignore_tls_errors: bool) -> Self {
     self.ignore_tls_errors = ignore_tls_errors;
     self
   }
 
+  /// If set to true, the client will fallback to vanilla requests if the impersonated browser encounters an error.
   pub fn with_fallback_to_vanilla(mut self, vanilla_fallback: bool) -> Self {
     self.vanilla_fallback = vanilla_fallback;
     self
   }
   
+  /// Sets the proxy URL to use for requests.
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
     self
   }
 
+  /// Sets the default timeout for requests.
+  pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
+    self.request_timeout = timeout;
+    self
+  }
+
+  /// Builds the `Retcher` instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
   }
@@ -78,13 +90,15 @@ impl RetcherConfig {
 #[derive(Debug, Clone)]
 pub struct RequestOptions {
   /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
-  pub headers: HashMap<String, String>
+  pub headers: HashMap<String, String>,
+  pub timeout: Option<Duration>,
 }
 
 impl Default for RequestOptions {
   fn default() -> Self {
     RequestOptions {
       headers: HashMap::new(),
+      timeout: None,
     }
   }
 }
@@ -100,7 +114,8 @@ impl Retcher {
     client = client
       .danger_accept_invalid_certs(config.ignore_tls_errors)
       .danger_accept_invalid_hostnames(config.ignore_tls_errors)
-      .use_preconfigured_tls(tls_config);
+      .use_preconfigured_tls(tls_config)
+      .timeout(config.request_timeout);
 
     if config.proxy_url.len() > 0 {
       client = client.proxy(
@@ -155,10 +170,16 @@ impl Retcher {
     let request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into());
 
-    let request = match body {
+    let mut request = match body {
       Some(body) => request.body(body),
       None => request
     };
+
+    if let Some(options) = options {
+      if let Some(timeout) = options.timeout {
+        request = request.timeout(timeout);
+      }
+    }
 
     let response: Result<Response, reqwest::Error> = request.send().await;
 
