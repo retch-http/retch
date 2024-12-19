@@ -1,3 +1,4 @@
+#![deny(unused_crate_dependencies)]
 mod http_headers;
 mod tls;
 pub mod retcher;
@@ -9,3 +10,7 @@ pub enum Browser {
   Firefox,
 }
 
+pub(crate) mod errors;
+pub(crate) mod utils;
+pub(crate) mod http3;
+pub mod request;
