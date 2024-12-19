@@ -1,3 +1,4 @@
+#![deny(unused_crate_dependencies)]
 mod http_headers;
 mod tls;
 pub mod retcher;
