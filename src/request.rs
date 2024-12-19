@@ -5,14 +5,16 @@ use std::{collections::HashMap, time::Duration};
 pub struct RequestOptions {
   /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
   pub headers: HashMap<String, String>,
-  pub timeout: Option<Duration>
+  pub timeout: Option<Duration>,
+  pub http3_prior_knowledge: bool,
 }
 
 impl Default for RequestOptions {
   fn default() -> Self {
     RequestOptions {
       headers: HashMap::new(),
-      timeout: None
+      timeout: None,
+      http3_prior_knowledge: false,
     }
   }
 }
