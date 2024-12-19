@@ -167,8 +167,13 @@ impl Retcher {
       .with_custom_headers(options.clone().unwrap_or_default().headers)
       .build();
 
-    let mut request = self.client.request(method.clone(), parsed_url)
+    let request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into());
+
+    let mut request = match body {
+      Some(body) => request.body(body),
+      None => request
+    };
 
     if let Some(options) = options {
       if let Some(timeout) = options.timeout {
