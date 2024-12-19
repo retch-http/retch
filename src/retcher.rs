@@ -1,8 +1,9 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
+use log::debug;
 use reqwest::{Method, Response, Version};
 use url::Url;
 
-use crate::{http_headers::HttpHeaders, tls};
+use crate::{http3::supports_http3_dns, http_headers::HttpHeaders, tls};
 use super::Browser;
 
 #[derive(Debug, Clone)]
@@ -199,6 +200,20 @@ impl Retcher {
       if let Some(timeout) = options.timeout {
         request = request.timeout(timeout);
       }
+    }
+
+    if self.config.max_http_version == Version::HTTP_3 {
+      debug!("Checking DNS records if the server supports HTTP/3...");
+
+      let res = supports_http3_dns(Url::parse(url.as_str()).unwrap()).await;
+
+      if res {
+        debug!("h3 ALPN DNS record found ({:#?} supports HTTP/3)", url);
+      } else {
+        debug!("no h3 ALPN record found ({:#?} might not support HTTP/3)", url);
+      }
+
+      request = request.version(Version::HTTP_3);
     }
 
     let response: Result<Response, reqwest::Error> = request.send().await;

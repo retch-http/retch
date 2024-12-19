@@ -9,3 +9,5 @@ pub enum Browser {
   Firefox,
 }
 
+pub(crate) mod http3;
+pub(crate) mod logger;
