@@ -1,36 +1,11 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 use reqwest::{Method, Response, Version};
-use url::Url;
 
-use crate::{http_headers::HttpHeaders, tls};
+use crate::{errors::ErrorType, http_headers::HttpHeaders, request::RequestOptions, tls, utils::parse_url};
 use super::Browser;
 
 #[derive(Debug, Clone)]
-pub enum ErrorType {
-  UrlParsingError,
-  UrlMissingHostnameError,
-  UrlProtocolError,
-  ImpersonationError,
-  RequestError,
-  ResponseError,
-}
-
-/// Retcher is the main struct used to make (impersonated) requests.
-/// 
-/// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
-pub struct Retcher {
-  pub(self) client: reqwest::Client,
-  config: RetcherConfig,
-}
-
-impl Default for Retcher {
-  fn default() -> Self {
-    RetcherConfig::default().build()
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct RetcherConfig {
+pub struct RetcherBuilder {
   browser: Option<Browser>,
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
@@ -38,9 +13,9 @@ pub struct RetcherConfig {
   max_http_version: Version,
 }
 
-impl Default for RetcherConfig {
+impl Default for RetcherBuilder {
   fn default() -> Self {
-    RetcherConfig {
+    RetcherBuilder {
       browser: None,
       ignore_tls_errors: false,
       vanilla_fallback: true,
@@ -50,7 +25,7 @@ impl Default for RetcherConfig {
   }
 }
 
-impl RetcherConfig {
+impl RetcherBuilder {
   pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
@@ -81,24 +56,28 @@ impl RetcherConfig {
   }
 }
 
-/// RequestOptions is a struct holding additional options for the fetch request.
-#[derive(Debug, Clone)]
-pub struct RequestOptions {
-  /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
-  pub headers: HashMap<String, String>
+
+/// Retcher is the main struct used to make (impersonated) requests.
+/// 
+/// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
+pub struct Retcher {
+  pub(self) client: reqwest::Client,
+  config: RetcherBuilder,
 }
 
-impl Default for RequestOptions {
+impl Default for Retcher {
   fn default() -> Self {
-    RequestOptions {
-      headers: HashMap::new(),
-    }
+    RetcherBuilder::default().build()
   }
 }
 
 impl Retcher {
+  pub fn builder() -> RetcherBuilder {
+    RetcherBuilder::default()
+  }
+
   /// Creates a new `Retcher` instance with the given `EngineOptions`.
-  fn new(config: RetcherConfig) -> Self {
+  fn new(config: RetcherBuilder) -> Self {
     let mut client = reqwest::Client::builder();
     let mut tls_config_builder = tls::TlsConfig::builder();
     let mut tls_config_builder = tls_config_builder.with_browser(config.browser);
@@ -131,34 +110,8 @@ impl Retcher {
     }
   }
 
-  fn parse_url(&self, url: String) -> Result<Url, ErrorType> {
-    let url = Url::parse(&url);
-
-    if url.is_err() {
-      return Err(ErrorType::UrlParsingError);
-    }
-    let url = url.unwrap();
-
-    if url.host_str().is_none() {
-      return Err(ErrorType::UrlMissingHostnameError);
-    }
-
-    let protocol = url.scheme();
-
-    return match protocol {
-      "http" => Ok(url),
-      "https" => Ok(url),
-      _ => Err(ErrorType::UrlProtocolError),
-    };
-  }
-
-  pub fn builder() -> RetcherConfig {
-    RetcherConfig::default()
-  }
-
   async fn make_request(&self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
-    let parsed_url = self
-      .parse_url(url.clone())
+    let parsed_url = parse_url(url.clone())
       .expect("URL should be a valid URL");
 
     let headers = HttpHeaders::get_builder()
@@ -168,7 +121,7 @@ impl Retcher {
       .with_custom_headers(options.clone().unwrap_or_default().headers)
       .build();
 
-    let mut request = self.client.request(method.clone(), parsed_url)
+    let request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into())
       .version(self.config.max_http_version);
 

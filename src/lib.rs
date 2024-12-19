@@ -9,3 +9,7 @@ pub enum Browser {
   Firefox,
 }
 
+pub(crate) mod errors;
+pub(crate) mod utils;
+pub(crate) mod request;
+
