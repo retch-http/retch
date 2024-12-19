@@ -3,7 +3,7 @@ use log::debug;
 use reqwest::{Method, Response, Version};
 use url::Url;
 
-use crate::{http3::DNSQuicProbe, http_headers::HttpHeaders, tls};
+use crate::{http3::DNSQuicProbe, http_headers::HttpHeaders, tls, request::RequestOptions};
 use super::Browser;
 
 #[derive(Debug, Clone)]
@@ -86,32 +86,17 @@ impl RetcherBuilder {
     self
   }
 
-  /// Builds the `Retcher` instance.
+  /// Enables HTTP/3 usage for requests.
+  /// 
+  /// Note that this is experimental and may not work as expected with all servers.
   pub fn with_http3(mut self) -> Self {
     self.max_http_version = Version::HTTP_3;
     self
   }
-
+  
+  /// Builds the `Retcher` instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct RequestOptions {
-  /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
-  pub headers: HashMap<String, String>,
-  pub timeout: Option<Duration>,
-  pub http3_prior_knowledge: bool,
-}
-
-impl Default for RequestOptions {
-  fn default() -> Self {
-    RequestOptions {
-      headers: HashMap::new(),
-      timeout: None,
-      http3_prior_knowledge: false,
-    }
   }
 }
 
