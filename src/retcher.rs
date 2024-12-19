@@ -193,6 +193,10 @@ impl Retcher {
   async fn make_request(&mut self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     let options = options.unwrap_or_default();
 
+    if options.http3_prior_knowledge && self.config.max_http_version < Version::HTTP_3 {
+      return Err(ErrorType::ImpersonationError);
+    }
+
     let parsed_url = self.parse_url(url.clone())
       .expect("URL should be a valid URL");
     let host = parsed_url.host_str().unwrap().to_string();
