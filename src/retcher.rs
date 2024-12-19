@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use log::debug;
 use reqwest::{Method, Response, Version};
 
-use crate::{{http3::DNSQuicProbe}, http_headers::HttpHeaders, logger, request::RequestOptions, tls, utils::parse_url};
+use crate::{http3::DNSQuicProbe, http_headers::HttpHeaders, request::RequestOptions, tls, utils::parse_url};
 use super::Browser;
 
 #[derive(Debug, Clone)]
@@ -129,8 +129,6 @@ impl Retcher {
 
   /// Creates a new `Retcher` instance with the given `EngineOptions`.
   fn new(config: RetcherBuilder) -> Self {
-    logger::setup_logger().unwrap();
-
     let mut h3_client: Option<reqwest::Client> = None;
     let mut base_client = Self::new_reqwest_client(&config).unwrap();
 

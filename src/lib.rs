@@ -12,5 +12,4 @@ pub enum Browser {
 pub(crate) mod errors;
 pub(crate) mod utils;
 pub(crate) mod http3;
-pub(crate) mod logger;
 pub mod request;
