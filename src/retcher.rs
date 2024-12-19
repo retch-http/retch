@@ -1,7 +1,7 @@
 use std::{str::FromStr, time::Duration};
 use reqwest::{Method, Response, Version};
 
-use crate::{errors::ErrorType, http_headers::HttpHeaders, request::RequestOptions, tls, utils::parse_url};
+use crate::{http_headers::HttpHeaders, request::RequestOptions, tls, utils::parse_url};
 use super::Browser;
 
 #[derive(Debug, Clone)]
@@ -28,36 +28,45 @@ impl Default for RetcherBuilder {
 }
 
 impl RetcherBuilder {
+  /// Sets the browser to impersonate.
   pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
   }
 
+  /// If set to true, the client will ignore TLS-related errors.
   pub fn with_ignore_tls_errors(mut self, ignore_tls_errors: bool) -> Self {
     self.ignore_tls_errors = ignore_tls_errors;
     self
   }
 
+  /// If set to true, the client will fallback to vanilla requests if the impersonated browser encounters an error.
   pub fn with_fallback_to_vanilla(mut self, vanilla_fallback: bool) -> Self {
     self.vanilla_fallback = vanilla_fallback;
     self
   }
   
+  /// Sets the proxy URL to use for requests.
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
     self
   }
 
+  /// Enables HTTP/3 support.
+  /// 
+  /// Note that this is an experimental feature and may not work as expected.
   pub fn with_http3(mut self) -> Self {
     self.max_http_version = Version::HTTP_3;
     self
   }
 
-  pub fn with_timeout(mut self, timeout: Duration) -> Self {
+  /// Sets the default timeout for requests.
+  pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
     self.request_timeout = timeout;
     self
   }
 
+  /// Builds the `Retcher` instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
   }
@@ -118,7 +127,7 @@ impl Retcher {
     }
   }
 
-  async fn make_request(&self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  async fn make_request(&self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     let parsed_url = parse_url(url.clone())
       .expect("URL should be a valid URL");
 
@@ -132,6 +141,12 @@ impl Retcher {
     let mut request = self.client.request(method.clone(), parsed_url)
       .headers(headers.into());
 
+    if let Some(options) = options {
+      if let Some(timeout) = options.timeout {
+        request = request.timeout(timeout);
+      }
+    }
+
     if self.config.max_http_version == Version::HTTP_3 {
       request = request.version(Version::HTTP_3);
     }
@@ -141,53 +156,38 @@ impl Retcher {
       None => request
     };
 
-    let response: Result<Response, reqwest::Error> = request.send().await;
-
-    if response.is_err() {
-      println!("{:#?}", response.err().unwrap());
-
-      if !self.config.vanilla_fallback || self.config.browser.is_none() { 
-        return Err(ErrorType::ImpersonationError)
-      }
-
-      return match Retcher::default().client.request(method, url).send().await {
-        Ok(response) => Ok(response),
-        Err(_) => Err(ErrorType::RequestError) // TODO: don't supress the error
-      }
-    }
-    
-    Ok(response.unwrap())
+    request.send().await
   }
 
-  pub async fn get(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn get(&self, url: String, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::GET, url, None, options).await
   }
 
-  pub async fn head(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn head(&self, url: String, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::HEAD, url, None, options).await
   }
   
-  pub async fn options(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn options(&self, url: String, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::OPTIONS, url, None, options).await
   }
 
-  pub async fn trace(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn trace(&self, url: String, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::TRACE, url, None, options).await
   }
 
-  pub async fn delete(&self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn delete(&self, url: String, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::DELETE, url, None, options).await
   }
 
-  pub async fn post(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn post(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::POST, url, body, options).await
   }
 
-  pub async fn put(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn put(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::PUT, url, body, options).await
   }
 
-  pub async fn patch(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
+  pub async fn patch(&self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, reqwest::Error> {
     self.make_request(Method::PATCH, url, body, options).await
   }
 }

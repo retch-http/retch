@@ -3,7 +3,4 @@ pub enum ErrorType {
   UrlParsingError,
   UrlMissingHostnameError,
   UrlProtocolError,
-  ImpersonationError,
-  RequestError,
-  ResponseError,
 }

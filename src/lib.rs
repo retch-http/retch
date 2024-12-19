@@ -11,5 +11,4 @@ pub enum Browser {
 
 pub(crate) mod errors;
 pub(crate) mod utils;
-pub(crate) mod request;
-
+pub mod request;
