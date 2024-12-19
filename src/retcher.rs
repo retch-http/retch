@@ -3,7 +3,7 @@ use log::debug;
 use reqwest::{Method, Response, Version};
 use url::Url;
 
-use crate::{http3::supports_http3_dns, http_headers::HttpHeaders, tls};
+use crate::{http3::DNSQuicProbe, http_headers::HttpHeaders, tls};
 use super::Browser;
 
 #[derive(Debug, Clone)]
@@ -22,6 +22,7 @@ pub enum ErrorType {
 pub struct Retcher {
   pub(self) base_client: reqwest::Client,
   pub(self) h3_client: Option<reqwest::Client>,
+  dns_quic_probe: Option<DNSQuicProbe>,
   h3_alt_svc: HashMap<String, bool>,
   config: RetcherBuilder,
 }
@@ -168,6 +169,7 @@ impl Retcher {
       h3_client,
       config,
       h3_alt_svc: HashMap::new(),
+      dns_quic_probe: None,
     }
   }
 
@@ -202,7 +204,11 @@ impl Retcher {
       return alt_svc.to_owned();
     }
 
-    let dns_h3_record_exists = supports_http3_dns(host).await;
+    if self.dns_quic_probe.is_none() {
+      self.dns_quic_probe = Some(DNSQuicProbe::init().await);
+    }
+
+    let dns_h3_record_exists = self.dns_quic_probe.as_mut().unwrap().supports_http3_dns(host).await;
     if dns_h3_record_exists {
       debug!("HTTP/3 DNS record found for {}", host);
       self.h3_alt_svc.insert(host.clone(), true);
