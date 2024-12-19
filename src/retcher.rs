@@ -121,9 +121,12 @@ impl Retcher {
       .with_custom_headers(options.clone().unwrap_or_default().headers)
       .build();
 
-    let request = self.client.request(method.clone(), parsed_url)
-      .headers(headers.into())
-      .version(self.config.max_http_version);
+    let mut request = self.client.request(method.clone(), parsed_url)
+      .headers(headers.into());
+
+    if self.config.max_http_version == Version::HTTP_3 {
+      request = request.version(Version::HTTP_3);
+    }
 
     let request = match body {
       Some(body) => request.body(body),
