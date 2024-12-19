@@ -81,13 +81,13 @@ pub struct HttpHeadersBuilder {
 
 impl HttpHeadersBuilder {
     // TODO: Enforce `with_host` to be called before `build`
-    pub fn with_host (&mut self, host: String) -> &mut Self {
-        self.host = host;
+    pub fn with_host (&mut self, host: &String) -> &mut Self {
+        self.host = host.to_owned();
         self
     }
 
-    pub fn with_browser (&mut self, browser: Option<Browser>) -> &mut Self {
-        self.browser = browser;
+    pub fn with_browser (&mut self, browser: &Option<Browser>) -> &mut Self {
+        self.browser = browser.to_owned();
         self
     }
 
@@ -96,8 +96,8 @@ impl HttpHeadersBuilder {
         self
     }
 
-    pub fn with_custom_headers (&mut self, custom_headers: HashMap<String, String>) -> &mut Self {
-        self.custom_headers = custom_headers.clone();
+    pub fn with_custom_headers (&mut self, custom_headers: &HashMap<String, String>) -> &mut Self {
+        self.custom_headers = custom_headers.to_owned();
         self
     }
 
