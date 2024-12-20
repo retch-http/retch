@@ -1,9 +1,9 @@
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 use log::debug;
 use reqwest::{Method, Response, Version};
 use url::Url;
 
-use crate::{http3::DNSQuicProbe, http_headers::HttpHeaders, tls};
+use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, RequestOptions};
 use super::Browser;
 
 #[derive(Debug, Clone)]
@@ -22,8 +22,7 @@ pub enum ErrorType {
 pub struct Retcher {
   pub(self) base_client: reqwest::Client,
   pub(self) h3_client: Option<reqwest::Client>,
-  dns_quic_probe: Option<DNSQuicProbe>,
-  h3_alt_svc: HashMap<String, bool>,
+  h3_engine: Option<H3Engine>,
   config: RetcherBuilder,
 }
 
@@ -86,32 +85,17 @@ impl RetcherBuilder {
     self
   }
 
-  /// Builds the `Retcher` instance.
+  /// Enables HTTP/3 usage for requests.
+  /// 
+  /// Note that this is experimental and may not work as expected with all servers.
   pub fn with_http3(mut self) -> Self {
     self.max_http_version = Version::HTTP_3;
     self
   }
-
+  
+  /// Builds the `Retcher` instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct RequestOptions {
-  /// A `HashMap` that holds custom HTTP headers. These are added to the default headers and should never overwrite them.
-  pub headers: HashMap<String, String>,
-  pub timeout: Option<Duration>,
-  pub http3_prior_knowledge: bool,
-}
-
-impl Default for RequestOptions {
-  fn default() -> Self {
-    RequestOptions {
-      headers: HashMap::new(),
-      timeout: None,
-      http3_prior_knowledge: false,
-    }
   }
 }
 
@@ -168,8 +152,7 @@ impl Retcher {
       base_client, 
       h3_client,
       config,
-      h3_alt_svc: HashMap::new(),
-      dns_quic_probe: None,
+      h3_engine: None,
     }
   }
 
@@ -200,25 +183,19 @@ impl Retcher {
       return false;
     }
 
-    if let Some(alt_svc) = self.h3_alt_svc.get(host) {
-      return alt_svc.to_owned();
+    if let None = &self.h3_engine {
+      self.h3_engine = Some(H3Engine::init().await);
     }
 
-    if self.dns_quic_probe.is_none() {
-      self.dns_quic_probe = Some(DNSQuicProbe::init().await);
-    }
-
-    let dns_h3_record_exists = self.dns_quic_probe.as_mut().unwrap().supports_http3_dns(host).await;
-    if dns_h3_record_exists {
-      debug!("HTTP/3 DNS record found for {}", host);
-      self.h3_alt_svc.insert(host.clone(), true);
-    }
-
-    dns_h3_record_exists
+    self.h3_engine.as_mut().unwrap().host_supports_h3(host).await
   }
 
   async fn make_request(&mut self, method: Method, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     let options = options.unwrap_or_default();
+
+    if options.http3_prior_knowledge && self.config.max_http_version < Version::HTTP_3 {
+      return Err(ErrorType::ImpersonationError);
+    }
 
     let parsed_url = self.parse_url(url.clone())
       .expect("URL should be a valid URL");
@@ -253,7 +230,7 @@ impl Retcher {
       request = request.timeout(timeout);
     }
 
-    let request = match body {
+    request = match body {
       Some(body) => request.body(body),
       None => request
     };
@@ -266,13 +243,17 @@ impl Retcher {
     
     let response = response.unwrap();
     
-    self.h3_alt_svc.insert(host.clone(), false);
-
-    if let Some(alt_svc) = response.headers().get("Alt-Svc") {
-      let alt_svc = alt_svc.to_str().unwrap();
-      if alt_svc.contains("h3") {
-        debug!("{} supports HTTP/3 (alt-svc header), adding to Alt-Svc cache", host);
-        self.h3_alt_svc.insert(host, true);
+    if !h3 {
+      if let Some(h3_engine) = self.h3_engine.as_mut() {
+        h3_engine.set_h3_support(&host, false);
+  
+        if let Some(alt_svc) = response.headers().get("Alt-Svc") {
+          let alt_svc = alt_svc.to_str().unwrap();
+          if alt_svc.contains("h3") {
+            debug!("{} supports HTTP/3 (alt-svc header), adding to Alt-Svc cache", host);
+            h3_engine.set_h3_support(&host, true);
+          }
+        }
       }
     }
     
