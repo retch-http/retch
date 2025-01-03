@@ -6,13 +6,13 @@ use url::Url;
 use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, RequestOptions};
 use super::Browser;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ErrorType {
   UrlParsingError,
   UrlMissingHostnameError,
   UrlProtocolError,
   ImpersonationError,
-  RequestError,
+  RequestError(reqwest::Error),
   ResponseError,
 }
 
@@ -33,6 +33,12 @@ impl Default for Retcher {
 }
 
 #[derive(Debug, Clone)]
+pub enum RedirectBehavior {
+  FollowRedirect(usize),
+  ManualRedirect,
+}
+
+#[derive(Debug, Clone)]
 pub struct RetcherBuilder {
   browser: Option<Browser>,
   ignore_tls_errors: bool,
@@ -40,6 +46,7 @@ pub struct RetcherBuilder {
   proxy_url: String,
   request_timeout: Duration,
   max_http_version: Version,
+  redirect: RedirectBehavior,
 }
 
 impl Default for RetcherBuilder {
@@ -51,6 +58,7 @@ impl Default for RetcherBuilder {
       proxy_url: String::from_str("").unwrap(),
       request_timeout: Duration::from_secs(30),
       max_http_version: Version::HTTP_2,
+      redirect: RedirectBehavior::FollowRedirect(10),
     }
   }
 }
@@ -92,6 +100,12 @@ impl RetcherBuilder {
     self.max_http_version = Version::HTTP_3;
     self
   }
+
+  /// Sets the desired redirect behavior.
+  pub fn with_redirect(mut self, behavior: RedirectBehavior) -> Self {
+    self.redirect = behavior;
+    self
+  }
   
   /// Builds the `Retcher` instance.
   pub fn build(self) -> Retcher {
@@ -131,6 +145,15 @@ impl Retcher {
         reqwest::Proxy::all(&config.proxy_url)
         .expect("The proxy_url option should be a valid URL.")
       );
+    }
+
+    match config.redirect {
+      RedirectBehavior::FollowRedirect(max) => {
+        client = client.redirect(reqwest::redirect::Policy::limited(max));
+      },
+      RedirectBehavior::ManualRedirect => {
+        client = client.redirect(reqwest::redirect::Policy::none());
+      },
     }
 
     client.build()
@@ -239,7 +262,7 @@ impl Retcher {
     let response = request.send().await;
 
     if response.is_err() {
-      return Err(ErrorType::RequestError);
+      return Err(ErrorType::RequestError(response.err().unwrap()));
     }
     
     let response = response.unwrap();
