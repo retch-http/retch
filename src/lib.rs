@@ -12,4 +12,12 @@ pub enum Browser {
 
 pub(crate) mod http3;
 pub(crate) mod request;
+mod response_parsing;
+
 pub use request::RequestOptions;
+
+pub mod utils {
+  pub use crate::response_parsing::decode;
+  pub use crate::response_parsing::ContentType;
+  pub use encoding::all as encodings;
+}
