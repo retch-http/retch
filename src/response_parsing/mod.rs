@@ -5,6 +5,10 @@ use encoding::Encoding;
 /// 
 /// See more details at https://encoding.spec.whatwg.org/#bom-sniff
 fn bom_sniffing(bytes: &Vec<u8>) -> Option<encoding::EncodingRef> {
+    if bytes.len() < 3 {
+        return None;
+    }
+
     if [0xEF, 0xBB, 0xBF].to_vec() == bytes[0..3].to_vec() {
         return Some(encoding::all::UTF_8);
     }
@@ -24,6 +28,10 @@ fn bom_sniffing(bytes: &Vec<u8>) -> Option<encoding::EncodingRef> {
 /// 
 /// See more details at https://html.spec.whatwg.org/#prescan-a-byte-stream-to-determine-its-encoding
 pub fn prescan_bytestream(bytes: &Vec<u8>) -> Option<encoding::EncodingRef> {
+    if bytes.len() < 4 {
+        return None;
+    }
+
     let limit = std::cmp::min(1024, bytes.len());
 
     let ascii_body = encoding::all::ASCII.decode(&bytes[0..limit], encoding::DecoderTrap::Replace).unwrap();
