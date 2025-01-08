@@ -2,6 +2,16 @@
 //! 
 //! Retch is a `rust` library that allows you to impersonate a browser and make requests to websites. It is built on top of `reqwest`, `rustls` and `tokio` and supports HTTP/1.1, HTTP/2, and HTTP/3.
 //! 
+//! The library provides a simple API for making requests to websites, and it also allows you to customize the request headers, use proxies, custom timeouts and more.
+//! 
+//! ### Other projects
+//! 
+//! If you are looking for a command-line tool that allows you to make requests to websites, check out the [`retch-cli`](https://github.com/retch-http/retch-cli/) project.
+//! 
+//! If you'd prefer to use `retch` from a Node.js application, check out the [`retch-node`](https://github.com/retch-http/retch-node) repository, or download the package from npm:
+//! ```bash
+//! npm install retch-http
+//! ```
 //! 
 //! ### ⚠️ Warning ⚠️
 //!
@@ -12,18 +22,17 @@
 //! ```toml
 //! 
 //! [dependencies]
-//! retch = { path="../retch" }
-//! rustls = { version="0.23.16" }
-//! tokio = { version="1.41.1", features = ["full"] }
+//! retch = { git="https://github.com/retch-http/retch.git", branch="master" }
 //! 
 //! [patch.crates-io]
-//! rustls = { path="../rustls/rustls/" }
-//! reqwest = { path="../reqwest/" }
-//! h2 = { path="../h2/" }
+//! rustls = { git="https://github.com/retch-http/rustls.git", branch="retch-patch" }
+//! h2 = { git="https://github.com/retch-http/h2.git", branch="retch-patch" }
 //! ```
 //! 
+//! Without the patched dependencies, the project won't build.
 //! 
-//! 
+//! Note that you also have to build your project with `rustflags = "--cfg reqwest_unstable"`, otherwise, the build will also fail.
+//! This is because `retch` uses unstable features of `reqwest` (namely `http3` support), which are not available in the stable version of the library.
 
 #![deny(unused_crate_dependencies)]
 mod http_headers;
