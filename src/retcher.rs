@@ -75,33 +75,47 @@ impl RetcherBuilder {
     self
   }
 
-  /// If set to true, the client will fallback to vanilla requests if the impersonated browser encounters an error.
+  /// If set to `true`, the client will retry the request without impersonation 
+  /// if the impersonated browser encounters an error.
   pub fn with_fallback_to_vanilla(mut self, vanilla_fallback: bool) -> Self {
     self.vanilla_fallback = vanilla_fallback;
     self
   }
   
   /// Sets the proxy URL to use for requests.
+  /// 
+  /// Note that this proxy will be used for all the requests 
+  /// made by the built `Retcher` instance.
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
     self
   }
 
   /// Sets the default timeout for requests.
+  /// 
+  /// This setting can be overridden when making the request by using the `RequestOptions` struct.
   pub fn with_default_timeout(mut self, timeout: Duration) -> Self {
     self.request_timeout = timeout;
     self
   }
 
   /// Enables HTTP/3 usage for requests.
-  /// 
-  /// Note that this is experimental and may not work as expected with all servers.
+  ///
+  /// `retch` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc`` header.
+  /// To enforce HTTP/3 usage, use the `http3_prior_knowledge` option in the `RequestOptions` struct when
+  /// making the request.
+  ///
+  /// Note that this feature is experimental and may not work as expected with all servers.
   pub fn with_http3(mut self) -> Self {
     self.max_http_version = Version::HTTP_3;
     self
   }
 
   /// Sets the desired redirect behavior.
+  ///
+  /// By default, the client will follow up to 10 redirects.
+  /// By passing the `RedirectBehavior::ManualRedirect` option, the client will not follow any redirects
+  /// (i.e. it will return the response for the first request, with the 3xx status code).
   pub fn with_redirect(mut self, behavior: RedirectBehavior) -> Self {
     self.redirect = behavior;
     self
@@ -127,8 +141,10 @@ impl Retcher {
       tls_config_builder = tls_config_builder.with_http3();
     }
 
+    tls_config_builder = tls_config_builder.with_ignore_tls_errors(config.ignore_tls_errors);
+
     let tls_config = tls_config_builder.build();
-    
+
     client = client
       .danger_accept_invalid_certs(config.ignore_tls_errors)
       .danger_accept_invalid_hostnames(config.ignore_tls_errors)
@@ -159,7 +175,7 @@ impl Retcher {
     client.build()
   }
 
-  /// Creates a new `Retcher` instance with the given `EngineOptions`.
+  /// Creates a new `Retcher` instance based on the options stored in the `RetcherBuilder` instance.
   fn new(config: RetcherBuilder) -> Self {
     let mut h3_client: Option<reqwest::Client> = None;
     let mut base_client = Self::new_reqwest_client(&config).unwrap();
@@ -284,34 +300,82 @@ impl Retcher {
     Ok(response)
   }
 
+  /// Makes a `GET` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn get(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::GET, url, None, options).await
   }
 
+  /// Makes a `HEAD` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn head(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::HEAD, url, None, options).await
   }
-  
+
+  /// Makes an OPTIONS request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn options(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::OPTIONS, url, None, options).await
   }
 
+  /// Makes a `TRACE` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn trace(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::TRACE, url, None, options).await
   }
 
+  /// Makes a `DELETE` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn delete(&mut self, url: String, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::DELETE, url, None, options).await
   }
 
+  /// Makes a `POST` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn post(&mut self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::POST, url, body, options).await
   }
 
+  /// Makes a `PUT` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn put(&mut self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::PUT, url, body, options).await
   }
 
+  /// Makes a `PATCH` request to the specified URL.
+  /// 
+  /// The `url` parameter should be a valid URL.
+  /// Additional options like `headers`, `timeout` or HTTP/3 usage can be passed via the `RequestOptions` struct.
+  /// 
+  /// If the request is successful, the `reqwest::Response` struct is returned.
   pub async fn patch(&mut self, url: String, body: Option<Vec<u8>>, options: Option<RequestOptions>) -> Result<Response, ErrorType> {
     self.make_request(Method::PATCH, url, body, options).await
   }

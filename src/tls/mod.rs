@@ -1,8 +1,11 @@
 mod statics;
 mod ffdhe;
 
+use std::sync::Arc;
+
 use crate::Browser;
 use reqwest::Version;
+use rustls::client::danger::{NoVerifier, ServerCertVerifier};
 use rustls::client::{BrowserEmulator as RusTLSBrowser, BrowserType, EchGreaseConfig};
 use rustls::crypto::aws_lc_rs::kx_group::{SECP256R1, SECP384R1, X25519};
 use rustls::crypto::CryptoProvider;
@@ -20,6 +23,7 @@ impl TlsConfig {
 pub struct TlsConfigBuilder {
   browser: Option<Browser>,
   max_http_version: Version,
+  ignore_tls_errors: bool,
 }
 
 impl Default for TlsConfigBuilder {
@@ -27,6 +31,7 @@ impl Default for TlsConfigBuilder {
       TlsConfigBuilder {
           browser: None,
           max_http_version: Version::HTTP_2,
+          ignore_tls_errors: false,
       }
   }
 }
@@ -47,6 +52,11 @@ impl TlsConfigBuilder {
 
   pub fn with_http3(&mut self) -> &mut Self {
       self.max_http_version = Version::HTTP_3;
+      self
+  }
+
+  pub fn with_ignore_tls_errors(&mut self, ignore_tls_errors: bool) -> &mut Self {
+      self.ignore_tls_errors = ignore_tls_errors;
       self
   }
 
@@ -81,7 +91,7 @@ impl TlsConfigBuilder {
           _ => {}
         }
 
-        let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
+        let mut config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
                 crypto_provider.into(),
             )
             // TODO - use the ECH extension consistently
@@ -89,6 +99,10 @@ impl TlsConfigBuilder {
             .with_root_certificates(root_store)
             .with_browser_emulator(&rustls_browser)
             .with_no_client_auth();
+
+        if self.ignore_tls_errors {
+          config.dangerous().set_certificate_verifier(Arc::new(NoVerifier::new(Some(rustls_browser))));
+        }
     
         config
       },
@@ -96,13 +110,17 @@ impl TlsConfigBuilder {
         let crypto_provider = CryptoProvider::builder()
             .build();
 
-        let config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
+        let mut config: rustls::ClientConfig = rustls::ClientConfig::builder_with_provider(
                 crypto_provider.into(),
             )
             // TODO - use the ECH extension consistently
             .with_ech(self.get_ech_mode()).unwrap()
             .with_root_certificates(root_store)
             .with_no_client_auth();
+
+        if self.ignore_tls_errors {
+          config.dangerous().set_certificate_verifier(Arc::new(NoVerifier::new(None)));
+        }
     
         config
       }
