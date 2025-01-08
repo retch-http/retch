@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use super::Browser;
+use crate::emulation::Browser;
 
 mod statics;
 

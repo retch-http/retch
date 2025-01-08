@@ -3,8 +3,7 @@ use log::debug;
 use reqwest::{Method, Response, Version};
 use url::Url;
 
-use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, RequestOptions};
-use super::Browser;
+use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, request::RequestOptions, emulation::Browser};
 
 #[derive(Debug)]
 pub enum ErrorType {
@@ -19,6 +18,8 @@ pub enum ErrorType {
 /// Retcher is the main struct used to make (impersonated) requests.
 /// 
 /// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
+/// 
+/// To create a new `Retcher` instance, use the [`Retcher::builder()`](RetcherBuilder) method.
 pub struct Retcher {
   pub(self) base_client: reqwest::Client,
   pub(self) h3_client: Option<reqwest::Client>,
@@ -38,6 +39,22 @@ pub enum RedirectBehavior {
   ManualRedirect,
 }
 
+/// A builder struct used to create a new `Retcher` instance.
+/// 
+/// The builder allows setting the browser to impersonate, ignoring TLS errors, setting a proxy, and other options.
+/// 
+/// ### Example
+/// ```rust
+/// let retcher = Retcher::builder()
+///   .with_browser(Browser::Firefox)
+///   .with_ignore_tls_errors(true)
+///   .with_proxy("http://localhost:8080".to_string())
+///   .with_default_timeout(Duration::from_secs(10))
+///   .with_http3()
+///   .build();
+/// 
+/// let response = retcher.get("https://example.com".to_string(), None).await;
+/// ```
 #[derive(Debug, Clone)]
 pub struct RetcherBuilder {
   browser: Option<Browser>,
@@ -64,6 +81,11 @@ impl Default for RetcherBuilder {
 }
 
 impl RetcherBuilder {
+  /// Sets the browser to impersonate.
+  /// 
+  /// The `Browser` enum is used to set the HTTP headers, TLS behaviour and other markers to impersonate a specific browser.
+  /// 
+  /// If not used, the client will use the default `reqwest` fingerprints.
   pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
@@ -101,7 +123,7 @@ impl RetcherBuilder {
 
   /// Enables HTTP/3 usage for requests.
   ///
-  /// `retch` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc`` header.
+  /// `retch` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc` header.
   /// To enforce HTTP/3 usage, use the `http3_prior_knowledge` option in the `RequestOptions` struct when
   /// making the request.
   ///
@@ -121,7 +143,7 @@ impl RetcherBuilder {
     self
   }
   
-  /// Builds the `Retcher` instance.
+  /// Builds the [`Retcher`] instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
   }

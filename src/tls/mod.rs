@@ -3,9 +3,9 @@ mod ffdhe;
 
 use std::sync::Arc;
 
-use crate::Browser;
+use crate::emulation::Browser;
 use reqwest::Version;
-use rustls::client::danger::{NoVerifier, ServerCertVerifier};
+use rustls::client::danger::NoVerifier;
 use rustls::client::{BrowserEmulator as RusTLSBrowser, BrowserType, EchGreaseConfig};
 use rustls::crypto::aws_lc_rs::kx_group::{SECP256R1, SECP384R1, X25519};
 use rustls::crypto::CryptoProvider;
