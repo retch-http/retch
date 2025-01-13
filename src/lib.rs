@@ -52,7 +52,10 @@ mod response_parsing;
 
 pub(crate) mod http3;
 
+/// Main module that contains the `Retcher` struct and its methods.
 pub mod retcher;
+
+/// Customizing request options.
 pub mod request;
 
 /// Contains browser emulation-related types and functions.

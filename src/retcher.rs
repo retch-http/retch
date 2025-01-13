@@ -5,14 +5,22 @@ use url::Url;
 
 use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, request::RequestOptions, emulation::Browser};
 
+/// Error types that can be returned by the `Retcher` struct.
+/// 
+/// The `ErrorType` enum is used to represent the different types of errors that can occur when making requests.
+/// The `RequestError` variant is used to wrap the `reqwest::Error` type.
 #[derive(Debug)]
 pub enum ErrorType {
+  /// The URL couldn't be parsed.
   UrlParsingError,
+  /// The URL is missing the hostname.
   UrlMissingHostnameError,
+  /// The URL uses an unsupported protocol.
   UrlProtocolError,
-  ImpersonationError,
+  /// The request was made with `http3_prior_knowledge`, but HTTP/3 usage wasn't enabled.
+  Http3Disabled,
+  /// `reqwest::Error` variant. See the nested error for more details.
   RequestError(reqwest::Error),
-  ResponseError,
 }
 
 /// Retcher is the main struct used to make (impersonated) requests.
@@ -33,9 +41,18 @@ impl Default for Retcher {
   }
 }
 
+/// Customizes the behavior of the `Retcher` struct when following redirects.
+/// 
+/// The `RedirectBehavior` enum is used to specify how the client should handle redirects.
 #[derive(Debug, Clone)]
 pub enum RedirectBehavior {
+  /// Follow up to `usize` redirects.
+  /// 
+  /// If the number of redirects is exceeded, the client will return an error.
   FollowRedirect(usize),
+  /// Don't follow any redirects.
+  /// 
+  /// The client will return the response for the first request, even with the `3xx` status code.
   ManualRedirect,
 }
 
@@ -256,7 +273,7 @@ impl Retcher {
     let options = options.unwrap_or_default();
 
     if options.http3_prior_knowledge && self.config.max_http_version < Version::HTTP_3 {
-      return Err(ErrorType::ImpersonationError);
+      return Err(ErrorType::Http3Disabled);
     }
 
     let parsed_url = self.parse_url(url.clone())

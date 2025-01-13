@@ -12,6 +12,8 @@ pub struct RequestOptions {
   /// The timeout for the request. This option overrides the global `Retcher` timeout.
   pub timeout: Option<Duration>,
   /// Enforce the use of HTTP/3 for this request. This will cause broken responses from servers that don't support HTTP/3.
+  /// 
+  /// If [`RetcherBuilder::with_http3`](crate::retcher::RetcherBuilder::with_http3) wasn't called, this option will cause [`ErrorType::Http3Disabled`](crate::retcher::ErrorType::Http3Disabled) errors.
   pub http3_prior_knowledge: bool,
 }
 
