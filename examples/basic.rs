@@ -1,14 +1,14 @@
-use retch::retcher::Retcher;
-use retch::emulation::Browser;
+use impit::impit::Impit;
+use impit::emulation::Browser;
  
  #[tokio::main]
  async fn main() {
-    let mut retcher = Retcher::builder()
+    let mut impit = Impit::builder()
         .with_browser(Browser::Firefox)
         .with_http3()
         .build();
 
-    let response = retcher.get(String::from("https://example.com"), None).await;
+    let response = impit.get(String::from("https://example.com"), None).await;
 
     match response {
         Ok(response) => {

@@ -1080,6 +1080,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "impit"
+version = "0.1.0"
+dependencies = [
+ "encoding",
+ "hickory-client",
+ "hickory-proto",
+ "log",
+ "num-bigint",
+ "reqwest",
+ "rustls",
+ "scraper",
+ "tokio",
+ "url",
+ "webpki-roots",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1759,23 +1776,6 @@ dependencies = [
  "web-sys",
  "webpki-roots",
  "windows-registry",
-]
-
-[[package]]
-name = "retch"
-version = "0.1.0"
-dependencies = [
- "encoding",
- "hickory-client",
- "hickory-proto",
- "log",
- "num-bigint",
- "reqwest",
- "rustls",
- "scraper",
- "tokio",
- "url",
- "webpki-roots",
 ]
 
 [[package]]

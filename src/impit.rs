@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, request::RequestOptions, emulation::Browser};
 
-/// Error types that can be returned by the `Retcher` struct.
+/// Error types that can be returned by the [`Impit`] struct.
 /// 
 /// The `ErrorType` enum is used to represent the different types of errors that can occur when making requests.
 /// The `RequestError` variant is used to wrap the `reqwest::Error` type.
@@ -23,25 +23,25 @@ pub enum ErrorType {
   RequestError(reqwest::Error),
 }
 
-/// Retcher is the main struct used to make (impersonated) requests.
+/// Impit is the main struct used to make (impersonated) requests.
 /// 
 /// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
 /// 
-/// To create a new `Retcher` instance, use the [`Retcher::builder()`](RetcherBuilder) method.
-pub struct Retcher {
+/// To create a new [`Impit`] instance, use the [`Impit::builder()`](ImpitBuilder) method.
+pub struct Impit {
   pub(self) base_client: reqwest::Client,
   pub(self) h3_client: Option<reqwest::Client>,
   h3_engine: Option<H3Engine>,
-  config: RetcherBuilder,
+  config: ImpitBuilder,
 }
 
-impl Default for Retcher {
+impl Default for Impit {
   fn default() -> Self {
-    RetcherBuilder::default().build()
+    ImpitBuilder::default().build()
   }
 }
 
-/// Customizes the behavior of the `Retcher` struct when following redirects.
+/// Customizes the behavior of the [`Impit`] struct when following redirects.
 /// 
 /// The `RedirectBehavior` enum is used to specify how the client should handle redirects.
 #[derive(Debug, Clone)]
@@ -56,13 +56,13 @@ pub enum RedirectBehavior {
   ManualRedirect,
 }
 
-/// A builder struct used to create a new `Retcher` instance.
+/// A builder struct used to create a new [`Impit`] instance.
 /// 
 /// The builder allows setting the browser to impersonate, ignoring TLS errors, setting a proxy, and other options.
 /// 
 /// ### Example
 /// ```rust
-/// let retcher = Retcher::builder()
+/// let mut impit = Impit::builder()
 ///   .with_browser(Browser::Firefox)
 ///   .with_ignore_tls_errors(true)
 ///   .with_proxy("http://localhost:8080".to_string())
@@ -70,10 +70,10 @@ pub enum RedirectBehavior {
 ///   .with_http3()
 ///   .build();
 /// 
-/// let response = retcher.get("https://example.com".to_string(), None).await;
+/// let response = impit.get("https://example.com".to_string(), None).await;
 /// ```
 #[derive(Debug, Clone)]
-pub struct RetcherBuilder {
+pub struct ImpitBuilder {
   browser: Option<Browser>,
   ignore_tls_errors: bool,
   vanilla_fallback: bool,
@@ -83,9 +83,9 @@ pub struct RetcherBuilder {
   redirect: RedirectBehavior,
 }
 
-impl Default for RetcherBuilder {
+impl Default for ImpitBuilder {
   fn default() -> Self {
-    RetcherBuilder {
+    ImpitBuilder {
       browser: None,
       ignore_tls_errors: false,
       vanilla_fallback: true,
@@ -97,10 +97,10 @@ impl Default for RetcherBuilder {
   }
 }
 
-impl RetcherBuilder {
+impl ImpitBuilder {
   /// Sets the browser to impersonate.
   /// 
-  /// The `Browser` enum is used to set the HTTP headers, TLS behaviour and other markers to impersonate a specific browser.
+  /// The [`Browser`] enum is used to set the HTTP headers, TLS behaviour and other markers to impersonate a specific browser.
   /// 
   /// If not used, the client will use the default `reqwest` fingerprints.
   pub fn with_browser(mut self, browser: Browser) -> Self {
@@ -124,7 +124,7 @@ impl RetcherBuilder {
   /// Sets the proxy URL to use for requests.
   /// 
   /// Note that this proxy will be used for all the requests 
-  /// made by the built `Retcher` instance.
+  /// made by the built [`Impit`] instance.
   pub fn with_proxy(mut self, proxy_url: String) -> Self {
     self.proxy_url = proxy_url;
     self
@@ -140,7 +140,7 @@ impl RetcherBuilder {
 
   /// Enables HTTP/3 usage for requests.
   ///
-  /// `retch` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc` header.
+  /// `impit` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc` header.
   /// To enforce HTTP/3 usage, use the `http3_prior_knowledge` option in the `RequestOptions` struct when
   /// making the request.
   ///
@@ -160,18 +160,18 @@ impl RetcherBuilder {
     self
   }
   
-  /// Builds the [`Retcher`] instance.
-  pub fn build(self) -> Retcher {
-    Retcher::new(self)
+  /// Builds the [`Impit`] instance.
+  pub fn build(self) -> Impit {
+    Impit::new(self)
   }
 }
 
-impl Retcher {
-  pub fn builder() -> RetcherBuilder {
-    RetcherBuilder::default()
+impl Impit {
+  pub fn builder() -> ImpitBuilder {
+    ImpitBuilder::default()
   }
 
-  fn new_reqwest_client(config: &RetcherBuilder) -> Result<reqwest::Client, reqwest::Error> {
+  fn new_reqwest_client(config: &ImpitBuilder) -> Result<reqwest::Client, reqwest::Error> {
     let mut client = reqwest::Client::builder();
     let mut tls_config_builder = tls::TlsConfig::builder();
     let mut tls_config_builder = tls_config_builder.with_browser(config.browser);
@@ -214,20 +214,20 @@ impl Retcher {
     client.build()
   }
 
-  /// Creates a new `Retcher` instance based on the options stored in the `RetcherBuilder` instance.
-  fn new(config: RetcherBuilder) -> Self {
+  /// Creates a new [`Impit`] instance based on the options stored in the [`ImpitBuilder`] instance.
+  fn new(config: ImpitBuilder) -> Self {
     let mut h3_client: Option<reqwest::Client> = None;
     let mut base_client = Self::new_reqwest_client(&config).unwrap();
 
     if config.max_http_version == Version::HTTP_3 {
       h3_client = Some(base_client);
-      base_client = Self::new_reqwest_client(&RetcherBuilder {
+      base_client = Self::new_reqwest_client(&ImpitBuilder {
         max_http_version: Version::HTTP_2,
         ..config.clone()
       }).unwrap();
     }
 
-    Retcher { 
+    Impit { 
       base_client, 
       h3_client,
       config,
