@@ -3,22 +3,31 @@ use log::debug;
 use reqwest::{Method, Response, Version};
 use url::Url;
 
-use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, RequestOptions};
-use super::Browser;
+use crate::{http3::H3Engine, http_headers::HttpHeaders, tls, request::RequestOptions, emulation::Browser};
 
+/// Error types that can be returned by the `Retcher` struct.
+/// 
+/// The `ErrorType` enum is used to represent the different types of errors that can occur when making requests.
+/// The `RequestError` variant is used to wrap the `reqwest::Error` type.
 #[derive(Debug)]
 pub enum ErrorType {
+  /// The URL couldn't be parsed.
   UrlParsingError,
+  /// The URL is missing the hostname.
   UrlMissingHostnameError,
+  /// The URL uses an unsupported protocol.
   UrlProtocolError,
-  ImpersonationError,
+  /// The request was made with `http3_prior_knowledge`, but HTTP/3 usage wasn't enabled.
+  Http3Disabled,
+  /// `reqwest::Error` variant. See the nested error for more details.
   RequestError(reqwest::Error),
-  ResponseError,
 }
 
 /// Retcher is the main struct used to make (impersonated) requests.
 /// 
 /// It uses `reqwest::Client` to make requests and holds info about the impersonated browser.
+/// 
+/// To create a new `Retcher` instance, use the [`Retcher::builder()`](RetcherBuilder) method.
 pub struct Retcher {
   pub(self) base_client: reqwest::Client,
   pub(self) h3_client: Option<reqwest::Client>,
@@ -32,12 +41,37 @@ impl Default for Retcher {
   }
 }
 
+/// Customizes the behavior of the `Retcher` struct when following redirects.
+/// 
+/// The `RedirectBehavior` enum is used to specify how the client should handle redirects.
 #[derive(Debug, Clone)]
 pub enum RedirectBehavior {
+  /// Follow up to `usize` redirects.
+  /// 
+  /// If the number of redirects is exceeded, the client will return an error.
   FollowRedirect(usize),
+  /// Don't follow any redirects.
+  /// 
+  /// The client will return the response for the first request, even with the `3xx` status code.
   ManualRedirect,
 }
 
+/// A builder struct used to create a new `Retcher` instance.
+/// 
+/// The builder allows setting the browser to impersonate, ignoring TLS errors, setting a proxy, and other options.
+/// 
+/// ### Example
+/// ```rust
+/// let retcher = Retcher::builder()
+///   .with_browser(Browser::Firefox)
+///   .with_ignore_tls_errors(true)
+///   .with_proxy("http://localhost:8080".to_string())
+///   .with_default_timeout(Duration::from_secs(10))
+///   .with_http3()
+///   .build();
+/// 
+/// let response = retcher.get("https://example.com".to_string(), None).await;
+/// ```
 #[derive(Debug, Clone)]
 pub struct RetcherBuilder {
   browser: Option<Browser>,
@@ -64,6 +98,11 @@ impl Default for RetcherBuilder {
 }
 
 impl RetcherBuilder {
+  /// Sets the browser to impersonate.
+  /// 
+  /// The `Browser` enum is used to set the HTTP headers, TLS behaviour and other markers to impersonate a specific browser.
+  /// 
+  /// If not used, the client will use the default `reqwest` fingerprints.
   pub fn with_browser(mut self, browser: Browser) -> Self {
     self.browser = Some(browser);
     self
@@ -101,7 +140,7 @@ impl RetcherBuilder {
 
   /// Enables HTTP/3 usage for requests.
   ///
-  /// `retch` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc`` header.
+  /// `retch` currently supports HTTP/3 negotiation via the HTTPS DNS record and the `Alt-Svc` header.
   /// To enforce HTTP/3 usage, use the `http3_prior_knowledge` option in the `RequestOptions` struct when
   /// making the request.
   ///
@@ -121,7 +160,7 @@ impl RetcherBuilder {
     self
   }
   
-  /// Builds the `Retcher` instance.
+  /// Builds the [`Retcher`] instance.
   pub fn build(self) -> Retcher {
     Retcher::new(self)
   }
@@ -234,7 +273,7 @@ impl Retcher {
     let options = options.unwrap_or_default();
 
     if options.http3_prior_knowledge && self.config.max_http_version < Version::HTTP_3 {
-      return Err(ErrorType::ImpersonationError);
+      return Err(ErrorType::Http3Disabled);
     }
 
     let parsed_url = self.parse_url(url.clone())
